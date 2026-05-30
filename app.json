@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "FaceAttend",
+    "name": "RecogMe",
     "slug": "FaceAttend",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -20,13 +20,19 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.karanpl.recogme"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-sqlite"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "cdc8920f-1092-442b-b9ba-2fa1ba47dd22"
+      }
+    }
   }
 }

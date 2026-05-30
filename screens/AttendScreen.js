@@ -1,15 +1,9 @@
+import * as FaceDetector from 'expo-face-detector';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import LivenessChecker from '../components/LivenessChecker';
 import FaceBox from '../components/FaceBox';
-
-// AttendScreen — Mark attendance with face + liveness check
-// Flow:
-//   1. Camera opens → face detection runs every frame
-//   2. LivenessChecker watches eye blinks → PASS after 2 blinks
-//   3. Camera captures photo → SFace model identifies worker
-//   4. Attendance saved to SQLite
 
 export default function AttendScreen({ onNavigate }) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -17,15 +11,41 @@ export default function AttendScreen({ onNavigate }) {
   const [livenessPass, setLivenessPass] = useState(false);
   const [status, setStatus]             = useState('');
   const [result, setResult]             = useState(null);
-  const cameraRef = useRef(null);
+  const cameraRef  = useRef(null);
+  const scanningRef = useRef(false);
+  const intervalRef = useRef(null);
 
-  // Called every frame by CameraView with detected faces
-  const handleFacesDetected = ({ faces }) => {
-    setFaces(faces);
-  };
+  // Take a photo every 400ms and run face detection on it
+  useEffect(() => {
+    if (!permission?.granted || livenessPass) return;
 
-  // Called by LivenessChecker when blinks are complete
+    intervalRef.current = setInterval(async () => {
+      if (scanningRef.current || !cameraRef.current) return;
+      scanningRef.current = true;
+      try {
+        const photo = await cameraRef.current.takePictureAsync({
+          quality: 0.2,
+          skipProcessing: true,
+          base64: false,
+        });
+        const detected = await FaceDetector.detectFacesAsync(photo.uri, {
+          mode: FaceDetector.FaceDetectorMode.fast,
+          detectLandmarks: FaceDetector.FaceDetectorLandmarks.none,
+          runClassifications: FaceDetector.FaceDetectorClassifications.all,
+        });
+        setFaces(detected.faces);
+      } catch (_) {
+        // ignore frame errors
+      } finally {
+        scanningRef.current = false;
+      }
+    }, 400);
+
+    return () => clearInterval(intervalRef.current);
+  }, [permission?.granted, livenessPass]);
+
   const handleLivenessPass = () => {
+    clearInterval(intervalRef.current);
     setLivenessPass(true);
     setStatus('Liveness verified! Recognizing...');
     handleCapture();
@@ -34,13 +54,9 @@ export default function AttendScreen({ onNavigate }) {
   const handleCapture = async () => {
     if (!cameraRef.current) return;
     try {
-      const photo = await cameraRef.current.takePictureAsync({
-        base64: true,
-        quality: 0.6,
-      });
+      const photo = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.6 });
       setStatus('Matching face...');
-      // TODO Day 3: Pass photo to SFace model → get 128 numbers → findBestMatch()
-      // Simulated result for now:
+      // TODO: Pass photo to SFace model → get 128 numbers → findBestMatch()
       setTimeout(() => {
         setResult('success');
         setStatus('Rahul Kumar — Attendance Marked ✅');
@@ -50,9 +66,7 @@ export default function AttendScreen({ onNavigate }) {
     }
   };
 
-  // ── Permission handling ──────────────────────────────────────────────────
   if (!permission) return <View />;
-
   if (!permission.granted) {
     return (
       <View style={styles.container}>
@@ -64,38 +78,21 @@ export default function AttendScreen({ onNavigate }) {
     );
   }
 
-  // ── Main UI ──────────────────────────────────────────────────────────────
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Mark Attendance</Text>
 
       <View style={styles.cameraWrapper}>
-        <CameraView
-          ref={cameraRef}
-          style={styles.camera}
-          facing="front"
-          onFacesDetected={handleFacesDetected}
-          faceDetectorSettings={{
-            mode: 'fast',
-            detectLandmarks: 'all',
-            runClassifications: 'all',  // gives eyeOpenProbability + smilingProbability
-            minDetectionInterval: 100,  // check every 100ms
-            tracking: true,
-          }}
-        >
-          {/* Green box around detected face */}
+        <CameraView ref={cameraRef} style={styles.camera} facing="front">
           {faces.map((face, i) => (
             <FaceBox key={i} face={face} />
           ))}
-
-          {/* Blink challenge overlay — hidden after liveness passes */}
           {!livenessPass && (
             <LivenessChecker faces={faces} onPass={handleLivenessPass} />
           )}
         </CameraView>
       </View>
 
-      {/* Status message */}
       {status ? (
         <Text style={[
           styles.status,
@@ -105,7 +102,6 @@ export default function AttendScreen({ onNavigate }) {
         </Text>
       ) : null}
 
-      {/* Show Done button after successful match */}
       {result === 'success' && (
         <TouchableOpacity style={styles.button} onPress={() => onNavigate('home')}>
           <Text style={styles.buttonText}>Done ✓</Text>
