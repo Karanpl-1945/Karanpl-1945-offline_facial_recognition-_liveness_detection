@@ -3,14 +3,13 @@ import { Buffer } from 'buffer';
 import * as jpeg from 'jpeg-js';
 
 // Crop face region from photo and resize to target dimensions
+// bounds is Vision Camera's flat format: { x, y, width, height }
 export async function cropAndResizeFace(imageUri, bounds, targetW, targetH) {
-  const { origin, size } = bounds;
-
   const pad = 0.20;
-  const x   = Math.max(0, origin.x - size.width  * pad);
-  const y   = Math.max(0, origin.y - size.height * pad);
-  const w   = size.width  * (1 + 2 * pad);
-  const h   = size.height * (1 + 2 * pad);
+  const x   = Math.max(0, bounds.x - bounds.width  * pad);
+  const y   = Math.max(0, bounds.y - bounds.height * pad);
+  const w   = bounds.width  * (1 + 2 * pad);
+  const h   = bounds.height * (1 + 2 * pad);
 
   return await ImageManipulator.manipulateAsync(
     imageUri,

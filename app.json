@@ -29,7 +29,14 @@
     "plugins": [
       "expo-sqlite",
       "react-native-fast-tflite",
-      "expo-asset"
+      "expo-asset",
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "RecogMe needs camera access to scan faces for attendance.",
+          "enableMicrophonePermission": false
+        }
+      ]
     ],
     "extra": {
       "eas": {

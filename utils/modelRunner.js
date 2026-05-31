@@ -9,9 +9,11 @@ let antispoofModel = null;
 let modelsLoading  = false;
 
 // Copy .tflite asset from APK bundle to local filesystem and load it
+// Note: loadTensorflowModel REQUIRES a second `delegates` arg ([] = default CPU)
 async function loadModelAsset(assetRequire) {
-  const [asset] = await Asset.loadAsync(assetRequire);
-  return await loadTensorflowModel({ url: asset.localUri });
+  const asset = Asset.fromModule(assetRequire);
+  if (!asset.localUri) await asset.downloadAsync();
+  return await loadTensorflowModel({ url: asset.localUri }, []);
 }
 
 export async function loadModels() {
