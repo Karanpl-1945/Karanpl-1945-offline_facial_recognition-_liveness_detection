@@ -2,37 +2,31 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { Buffer } from 'buffer';
 import * as jpeg from 'jpeg-js';
 
-// Crop face region from photo and resize to target dimensions
-// bounds: expo-face-detector { origin:{x,y}, size:{width,height} } in photo pixels
+// Crop the face region from a photo and resize to target dimensions.
+//
+// We do a CENTER CROP rather than using the face-detector bounds. Reason:
+// detectFacesAsync reports bounds in the display orientation, but the saved
+// JPEG's pixel space can be rotated/swapped (EXIF orientation), so the bounds
+// can fall outside the actual bitmap → "y + height must be <= bitmap.height()".
+// The on-screen oval guide makes the user center their face, so a centered
+// square reliably contains the face — no coordinate/orientation guesswork.
+//
+// `bounds` is accepted for API compatibility but not used.
 export async function cropAndResizeFace(imageUri, bounds, targetW, targetH) {
-  const { origin, size } = bounds;
-
-  // Get the real image dimensions so we can clamp the crop inside them
+  // Real (orientation-applied) image dimensions
   const info = await ImageManipulator.manipulateAsync(imageUri, [], {});
   const imgW = info.width;
   const imgH = info.height;
 
-  // Desired crop with 20% padding around the face
-  const pad = 0.20;
-  let x = Math.round(origin.x - size.width  * pad);
-  let y = Math.round(origin.y - size.height * pad);
-  let w = Math.round(size.width  * (1 + 2 * pad));
-  let h = Math.round(size.height * (1 + 2 * pad));
-
-  // Clamp origin to >= 0
-  x = Math.max(0, x);
-  y = Math.max(0, y);
-
-  // Clamp size so x+w <= imgW and y+h <= imgH (fixes "y + height must be <= bitmap.height()")
-  if (x + w > imgW) w = imgW - x;
-  if (y + h > imgH) h = imgH - y;
-  w = Math.max(1, w);
-  h = Math.max(1, h);
+  // Centered square covering most of the smaller dimension (the oval area)
+  const side = Math.floor(Math.min(imgW, imgH) * 0.9);
+  const x = Math.floor((imgW - side) / 2);
+  const y = Math.floor((imgH - side) / 2);
 
   return await ImageManipulator.manipulateAsync(
     imageUri,
     [
-      { crop: { originX: x, originY: y, width: w, height: h } },
+      { crop: { originX: x, originY: y, width: side, height: side } },
       { resize: { width: targetW, height: targetH } },
     ],
     { base64: true, format: ImageManipulator.SaveFormat.JPEG, compress: 1 }
