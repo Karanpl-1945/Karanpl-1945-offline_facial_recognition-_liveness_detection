@@ -13,7 +13,7 @@ let yunetModel = null;
 export async function loadYuNet() {
   if (yunetModel) return;
   const [asset] = await Asset.loadAsync(require('../assets/models/yunet.tflite'));
-  yunetModel = await loadTensorflowModel({ uri: asset.localUri });
+  yunetModel = await loadTensorflowModel({ url: asset.localUri });
 }
 
 // Run YuNet on an image URI

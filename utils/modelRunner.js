@@ -11,7 +11,7 @@ let modelsLoading  = false;
 // Copy .tflite asset from APK bundle to local filesystem and load it
 async function loadModelAsset(assetRequire) {
   const [asset] = await Asset.loadAsync(assetRequire);
-  return await loadTensorflowModel({ uri: asset.localUri });
+  return await loadTensorflowModel({ url: asset.localUri });
 }
 
 export async function loadModels() {

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-const BLINK_CLOSE  = 0.2;
-const BLINK_OPEN   = 0.7;
-const SMILE_THRESH = 0.7;
-const YAW_THRESH   = 15;
+const BLINK_CLOSE  = 0.35;
+const BLINK_OPEN   = 0.65;
+const SMILE_THRESH = 0.6;
+const YAW_THRESH   = 12;
 
 const CHALLENGES = ['blink', 'smile', 'turn'];
 
@@ -18,11 +18,12 @@ function shuffle(arr) {
 }
 
 export default function LivenessChecker({ faces, onPass }) {
-  const [order]      = useState(() => shuffle(CHALLENGES));
+  const [order]       = useState(() => shuffle(CHALLENGES));
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [done, setDone] = useState(false);
-  const eyeWasClosed = useRef(false);
-  const hasPassed    = useRef(false);
+  const [done, setDone]     = useState(false);
+  const [eyeVal, setEyeVal] = useState(1);
+  const eyeWasClosed  = useRef(false);
+  const hasPassed     = useRef(false);
 
   const currentChallenge = order[currentIdx];
 
@@ -30,12 +31,14 @@ export default function LivenessChecker({ faces, onPass }) {
     if (hasPassed.current || done) return;
     if (!faces || faces.length === 0) return;
 
-    const face    = faces[0];
-    const leftEye = face.leftEyeOpenProbability  ?? 1;
-    const rightEye= face.rightEyeOpenProbability ?? 1;
-    const avgEye  = (leftEye + rightEye) / 2;
-    const smile   = face.smilingProbability ?? 0;
-    const yaw     = face.yawAngle ?? 0;
+    const face     = faces[0];
+    const leftEye  = face.leftEyeOpenProbability  ?? 1;
+    const rightEye = face.rightEyeOpenProbability ?? 1;
+    const avgEye   = (leftEye + rightEye) / 2;
+    const smile    = face.smilingProbability ?? 0;
+    const yaw      = face.yawAngle ?? 0;
+
+    setEyeVal(avgEye);
 
     let passed = false;
 
@@ -68,7 +71,7 @@ export default function LivenessChecker({ faces, onPass }) {
   const getInstruction = () => {
     if (done) return '✅ Liveness Verified!';
     switch (currentChallenge) {
-      case 'blink': return '👁  Blink once';
+      case 'blink': return '👁  Blink once slowly';
       case 'smile': return '😊  Smile';
       case 'turn':  return '↔️  Turn head slightly';
       default:      return '';
@@ -78,6 +81,13 @@ export default function LivenessChecker({ faces, onPass }) {
   return (
     <View style={styles.overlay}>
       <Text style={styles.instruction}>{getInstruction()}</Text>
+
+      {currentChallenge === 'blink' && !done && (
+        <Text style={styles.debugVal}>
+          Eye: {eyeVal.toFixed(2)} {eyeWasClosed.current ? '● closed' : '○ open'}
+        </Text>
+      )}
+
       <View style={styles.dotsRow}>
         {order.map((_, i) => (
           <View
@@ -100,7 +110,8 @@ export default function LivenessChecker({ faces, onPass }) {
 
 const styles = StyleSheet.create({
   overlay:     { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.7)', padding: 20, alignItems: 'center' },
-  instruction: { color: '#FFD700', fontSize: 20, fontWeight: 'bold', marginBottom: 14 },
+  instruction: { color: '#FFD700', fontSize: 20, fontWeight: 'bold', marginBottom: 8 },
+  debugVal:    { color: '#aaa', fontSize: 12, marginBottom: 8 },
   dotsRow:     { flexDirection: 'row', gap: 12, marginBottom: 8 },
   dot:         { width: 14, height: 14, borderRadius: 7 },
   dotDone:     { backgroundColor: '#0f9d58' },
