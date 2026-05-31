@@ -76,6 +76,31 @@ export function normalizeBrightness(base64, width, height) {
   }
 }
 
+// Preprocess a cropped face for the anti-spoof-mn3 model.
+// Official spec (Intel Open Model Zoo): BGR order, (pixel - mean) / scale.
+//   mean  (B,G,R) = [151.2405, 119.5950, 107.8395]
+//   scale (B,G,R) = [63.0105,  56.4570,  55.0035]
+// NHWC interleaved (B,G,R per pixel) for the TFLite build. No brightness
+// normalization — the model expects raw pixels with its own mean/scale.
+export function base64ToAntiSpoofInput(base64, width, height) {
+  const buf      = Buffer.from(base64, 'base64');
+  const decoded  = jpeg.decode(buf, { useTArray: true });
+  const { data } = decoded; // RGBA
+  const mean  = [151.2405, 119.5950, 107.8395]; // B, G, R
+  const scale = [63.0105, 56.4570, 55.0035];     // B, G, R
+
+  const out = new Float32Array(width * height * 3);
+  for (let i = 0; i < width * height; i++) {
+    const r = data[i * 4];
+    const g = data[i * 4 + 1];
+    const b = data[i * 4 + 2];
+    out[i * 3]     = (b - mean[0]) / scale[0]; // B
+    out[i * 3 + 1] = (g - mean[1]) / scale[1]; // G
+    out[i * 3 + 2] = (r - mean[2]) / scale[2]; // R
+  }
+  return out;
+}
+
 // Convert base64 JPEG to Float32Array for TFLite input
 // Applies brightness normalization automatically before conversion
 // normMode:

@@ -1,6 +1,6 @@
 import { loadTensorflowModel } from 'react-native-fast-tflite';
 import { Asset } from 'expo-asset';
-import { cropAndResizeFace, base64ToFloat32 } from './imageUtils';
+import { cropAndResizeFace, base64ToFloat32, base64ToAntiSpoofInput } from './imageUtils';
 
 let sfaceModel     = null;
 let antispoofModel = null;
@@ -45,12 +45,16 @@ export async function getFaceEmbedding(imageUri, faceBounds) {
   return Array.from(new Float32Array(output[0]));
 }
 
-// Passive anti-spoof check (real face vs printed photo / screen)
+// Passive anti-spoof check (real face vs printed photo / screen).
+// anti-spoof-mn3: BGR + mean/scale preprocessing, output [real, spoof].
+// Use argmax (real vs spoof) rather than a fixed threshold.
 export async function checkAntiSpoof(imageUri, faceBounds) {
   if (!antispoofModel) return true;
   const cropped = await cropAndResizeFace(imageUri, faceBounds, 128, 128);
-  const input   = base64ToFloat32(cropped.base64, 128, 128, '0to1');
+  const input   = base64ToAntiSpoofInput(cropped.base64, 128, 128);
   const output  = await antispoofModel.run([input.buffer]);
   const scores  = new Float32Array(output[0]);
-  return scores[0] > 0.5;
+  const real    = scores[0];   // index 0 = real person (per model card)
+  const spoof   = scores[1];   // index 1 = spoof
+  return real >= spoof;
 }
