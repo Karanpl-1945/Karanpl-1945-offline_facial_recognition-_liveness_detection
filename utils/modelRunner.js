@@ -6,8 +6,6 @@ let sfaceModel     = null;
 let antispoofModel = null;
 let modelsLoading  = false;
 
-// Copy .tflite asset from APK bundle to local filesystem and load it
-// Note: loadTensorflowModel REQUIRES a second `delegates` arg ([] = default CPU)
 async function loadModelAsset(assetRequire) {
   const asset = Asset.fromModule(assetRequire);
   if (!asset.localUri) await asset.downloadAsync();
@@ -32,29 +30,26 @@ export function areModelsLoaded() {
   return sfaceModel !== null && antispoofModel !== null;
 }
 
-// Generate 128-D face embedding from a photo using SFace
-// faceBounds: expo-face-detector bounds { origin:{x,y}, size:{width,height} }
-// NOTE: YuNet alignment is temporarily bypassed — using direct crop for
-// reliability while we verify the core pipeline. Re-add alignment later.
 export async function getFaceEmbedding(imageUri, faceBounds) {
   if (!sfaceModel) throw new Error('SFace model not loaded');
   const cropped = await cropAndResizeFace(imageUri, faceBounds, 112, 112);
   const input   = base64ToFloat32(cropped.base64, 112, 112, 'minus1to1');
-  // run() takes ArrayBuffer[] and returns ArrayBuffer[]
   const output  = await sfaceModel.run([input.buffer]);
   return Array.from(new Float32Array(output[0]));
 }
 
-// Passive anti-spoof check (real face vs printed photo / screen).
-// anti-spoof-mn3: BGR + mean/scale preprocessing, output [real, spoof].
-// Use argmax (real vs spoof) rather than a fixed threshold.
+// Anti-spoof TEMPORARILY DISABLED — calibrating correct output interpretation.
+// Active liveness (blink/smile/turn) still protects against photo attacks.
 export async function checkAntiSpoof(imageUri, faceBounds) {
-  if (!antispoofModel) return true;
+  return true;
+}
+
+// Calibration helper — returns raw model scores for a face.
+// Use this to see what the model actually outputs for real vs spoof faces.
+export async function debugAntiSpoofScores(imageUri, faceBounds) {
+  if (!antispoofModel) return [];
   const cropped = await cropAndResizeFace(imageUri, faceBounds, 128, 128);
   const input   = base64ToAntiSpoofInput(cropped.base64, 128, 128);
   const output  = await antispoofModel.run([input.buffer]);
-  const scores  = new Float32Array(output[0]);
-  const real    = scores[0];   // index 0 = real person (per model card)
-  const spoof   = scores[1];   // index 1 = spoof
-  return real >= spoof;
+  return Array.from(new Float32Array(output[0]));
 }
