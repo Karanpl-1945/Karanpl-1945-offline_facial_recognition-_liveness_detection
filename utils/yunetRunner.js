@@ -1,4 +1,5 @@
 import { loadTensorflowModel } from 'react-native-fast-tflite';
+import { Asset } from 'expo-asset';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Buffer } from 'buffer';
 import * as jpeg from 'jpeg-js';
@@ -11,9 +12,8 @@ let yunetModel = null;
 
 export async function loadYuNet() {
   if (yunetModel) return;
-  yunetModel = await loadTensorflowModel(
-    require('../assets/models/yunet.tflite')
-  );
+  const [asset] = await Asset.loadAsync(require('../assets/models/yunet.tflite'));
+  yunetModel = await loadTensorflowModel({ uri: asset.localUri });
 }
 
 // Run YuNet on an image URI

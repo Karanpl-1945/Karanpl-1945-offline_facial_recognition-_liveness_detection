@@ -1,7 +1,7 @@
 import * as FaceDetector from 'expo-face-detector';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import LivenessChecker from '../components/LivenessChecker';
 import FaceBox from '../components/FaceBox';
 import { getFaceEmbedding, checkAntiSpoof, loadModels, areModelsLoaded } from '../utils/modelRunner';
@@ -40,7 +40,7 @@ export default function AttendScreen({ onNavigate }) {
         setFaces(detected.faces);
       } catch (_) {}
       finally { scanningRef.current = false; }
-    }, 400);
+    }, 150);
 
     return () => clearInterval(intervalRef.current);
   }, [permission?.granted, livenessPass]);
@@ -117,7 +117,7 @@ export default function AttendScreen({ onNavigate }) {
       setResult('success');
 
     } catch (e) {
-      setStatus('Error: ' + e.message);
+      Alert.alert('Error', e.message, [{ text: 'Try Again', onPress: handleRetry }]);
       setResult('unknown');
     }
   };

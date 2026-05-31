@@ -28,7 +28,8 @@
     },
     "plugins": [
       "expo-sqlite",
-      "react-native-fast-tflite"
+      "react-native-fast-tflite",
+      "expo-asset"
     ],
     "extra": {
       "eas": {

@@ -54,7 +54,7 @@ export default function EnrollScreen({ onNavigate }) {
         }
       } catch (_) {}
       finally { scanningRef.current = false; }
-    }, 400);
+    }, 150);
 
     return () => clearInterval(intervalRef.current);
   }, [step, permission?.granted, livenessPass]);
@@ -136,8 +136,7 @@ export default function EnrollScreen({ onNavigate }) {
       );
 
     } catch (e) {
-      setStatus('Error: ' + e.message);
-      resetLiveness();
+      Alert.alert('Error', e.message, [{ text: 'Try Again', onPress: resetLiveness }]);
     }
   };
 
