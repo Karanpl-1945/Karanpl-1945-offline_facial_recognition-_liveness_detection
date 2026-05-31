@@ -1,93 +1,110 @@
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-// LivenessChecker — detects blink using eyeOpenProbability
-//
-// How it works:
-//   Parent camera sends face data every frame via the `faces` prop
-//   We read eyeOpenProbability from the face (0.0 = closed, 1.0 = open)
-//   open → close → open = 1 blink
-//   2 blinks = PASS → calls onPass()
-//
-// Props:
-//   faces  — array of face objects from CameraView onFacesDetected
-//   onPass — called when liveness is confirmed
+const BLINK_CLOSE  = 0.2;
+const BLINK_OPEN   = 0.7;
+const SMILE_THRESH = 0.7;
+const YAW_THRESH   = 15;
 
-const BLINK_CLOSE_THRESHOLD = 0.2; // below this = eye closed
-const BLINK_OPEN_THRESHOLD  = 0.7; // above this = eye open
-const BLINKS_REQUIRED       = 2;   // blinks needed to pass
+const CHALLENGES = ['blink', 'smile', 'turn'];
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 export default function LivenessChecker({ faces, onPass }) {
-  const [blinkCount, setBlinkCount]     = useState(0);
-  const [challenge, setChallenge]       = useState('👁  Blink twice to continue');
+  const [order]      = useState(() => shuffle(CHALLENGES));
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [done, setDone] = useState(false);
   const eyeWasClosed = useRef(false);
   const hasPassed    = useRef(false);
 
+  const currentChallenge = order[currentIdx];
+
   useEffect(() => {
-    if (hasPassed.current) return;
+    if (hasPassed.current || done) return;
     if (!faces || faces.length === 0) return;
 
     const face    = faces[0];
     const leftEye = face.leftEyeOpenProbability  ?? 1;
     const rightEye= face.rightEyeOpenProbability ?? 1;
     const avgEye  = (leftEye + rightEye) / 2;
+    const smile   = face.smilingProbability ?? 0;
+    const yaw     = face.yawAngle ?? 0;
 
-    if (avgEye < BLINK_CLOSE_THRESHOLD && !eyeWasClosed.current) {
-      // Eye just closed
-      eyeWasClosed.current = true;
+    let passed = false;
 
-    } else if (avgEye > BLINK_OPEN_THRESHOLD && eyeWasClosed.current) {
-      // Eye just opened after closing = 1 full blink
+    if (currentChallenge === 'blink') {
+      if (avgEye < BLINK_CLOSE && !eyeWasClosed.current) {
+        eyeWasClosed.current = true;
+      } else if (avgEye > BLINK_OPEN && eyeWasClosed.current) {
+        eyeWasClosed.current = false;
+        passed = true;
+      }
+    } else if (currentChallenge === 'smile') {
+      if (smile > SMILE_THRESH) passed = true;
+    } else if (currentChallenge === 'turn') {
+      if (Math.abs(yaw) > YAW_THRESH) passed = true;
+    }
+
+    if (passed) {
       eyeWasClosed.current = false;
-
-      setBlinkCount(prev => {
-        const newCount = prev + 1;
-        if (newCount >= BLINKS_REQUIRED) {
-          hasPassed.current = true;
-          setChallenge('✅ Liveness Verified!');
-          setTimeout(() => onPass(), 600);
-        }
-        return newCount;
-      });
+      const nextIdx = currentIdx + 1;
+      if (nextIdx >= order.length) {
+        hasPassed.current = true;
+        setDone(true);
+        setTimeout(() => onPass(), 500);
+      } else {
+        setCurrentIdx(nextIdx);
+      }
     }
   }, [faces]);
 
+  const getInstruction = () => {
+    if (done) return '✅ Liveness Verified!';
+    switch (currentChallenge) {
+      case 'blink': return '👁  Blink once';
+      case 'smile': return '😊  Smile';
+      case 'turn':  return '↔️  Turn head slightly';
+      default:      return '';
+    }
+  };
+
   return (
     <View style={styles.overlay}>
-      <Text style={styles.challengeText}>{challenge}</Text>
+      <Text style={styles.instruction}>{getInstruction()}</Text>
       <View style={styles.dotsRow}>
-        {Array.from({ length: BLINKS_REQUIRED }).map((_, i) => (
+        {order.map((_, i) => (
           <View
             key={i}
-            style={[styles.dot, i < blinkCount ? styles.dotFilled : styles.dotEmpty]}
+            style={[
+              styles.dot,
+              i < currentIdx || done ? styles.dotDone  :
+              i === currentIdx       ? styles.dotActive :
+                                       styles.dotEmpty
+            ]}
           />
         ))}
       </View>
+      <Text style={styles.step}>
+        {done ? 'Done!' : `Step ${currentIdx + 1} of ${order.length}`}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    position: 'absolute',
-    bottom: 0, left: 0, right: 0,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    padding: 18,
-    alignItems: 'center',
-  },
-  challengeText: {
-    color: '#FFD700',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
-  },
-  dotsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  dot: {
-    width: 16, height: 16, borderRadius: 8,
-  },
-  dotFilled: { backgroundColor: '#0f9d58' },
-  dotEmpty:  { backgroundColor: '#555' },
+  overlay:     { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.7)', padding: 20, alignItems: 'center' },
+  instruction: { color: '#FFD700', fontSize: 20, fontWeight: 'bold', marginBottom: 14 },
+  dotsRow:     { flexDirection: 'row', gap: 12, marginBottom: 8 },
+  dot:         { width: 14, height: 14, borderRadius: 7 },
+  dotDone:     { backgroundColor: '#0f9d58' },
+  dotActive:   { backgroundColor: '#FFD700' },
+  dotEmpty:    { backgroundColor: '#444' },
+  step:        { color: '#888', fontSize: 12 },
 });

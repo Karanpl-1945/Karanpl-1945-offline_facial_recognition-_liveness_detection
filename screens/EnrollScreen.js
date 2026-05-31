@@ -14,6 +14,7 @@ export default function EnrollScreen({ onNavigate }) {
   const [faces, setFaces]               = useState([]);
   const [livenessPass, setLivenessPass] = useState(false);
   const [status, setStatus]             = useState('');
+  const [faceWarning, setFaceWarning]   = useState('');
   const cameraRef   = useRef(null);
   const scanningRef = useRef(false);
   const intervalRef = useRef(null);
@@ -37,7 +38,20 @@ export default function EnrollScreen({ onNavigate }) {
           detectLandmarks: FaceDetector.FaceDetectorLandmarks.none,
           runClassifications: FaceDetector.FaceDetectorClassifications.all,
         });
-        setFaces(result.faces);
+        const detectedFaces = result.faces;
+        setFaces(detectedFaces);
+
+        // Quality check
+        if (detectedFaces.length > 0) {
+          const { size } = detectedFaces[0].bounds;
+          if (size.width < 100) {
+            setFaceWarning('Move closer to the camera');
+          } else {
+            setFaceWarning('');
+          }
+        } else {
+          setFaceWarning('No face detected');
+        }
       } catch (_) {}
       finally { scanningRef.current = false; }
     }, 400);
@@ -185,6 +199,10 @@ export default function EnrollScreen({ onNavigate }) {
         {step === 'processing' ? status : 'Complete the liveness check to register'}
       </Text>
 
+      {faceWarning ? (
+        <Text style={styles.warning}>⚠️ {faceWarning}</Text>
+      ) : null}
+
       <View style={styles.cameraWrapper}>
         <CameraView ref={cameraRef} style={styles.camera} facing="front">
           {!livenessPass && step === 'liveness' && (
@@ -217,4 +235,5 @@ const styles = StyleSheet.create({
   primaryBtnText:{ color: '#fff', fontSize: 17, fontWeight: 'bold' },
   backBtn:       { alignItems: 'center', marginTop: 12 },
   backText:      { color: '#555', fontSize: 14 },
+  warning:       { color: '#FFA500', textAlign: 'center', fontSize: 13, marginBottom: 8 },
 });

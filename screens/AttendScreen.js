@@ -15,7 +15,9 @@ export default function AttendScreen({ onNavigate }) {
   const [status, setStatus]             = useState('');
   const [result, setResult]             = useState(null); // 'success'|'spoof'|'unknown'
   const [matchedName, setMatchedName]   = useState('');
+  const [timeTaken, setTimeTaken]       = useState(0);
   const cameraRef   = useRef(null);
+  const startTime   = useRef(null);
   const scanningRef = useRef(false);
   const intervalRef = useRef(null);
 
@@ -51,6 +53,7 @@ export default function AttendScreen({ onNavigate }) {
 
   const processAttendance = async () => {
     if (!cameraRef.current) return;
+    startTime.current = Date.now();
 
     try {
       if (!areModelsLoaded()) {
@@ -110,6 +113,7 @@ export default function AttendScreen({ onNavigate }) {
       // Save attendance record to local SQLite
       await saveAttendance(match.worker.id, match.worker.name);
       setMatchedName(match.worker.name);
+      setTimeTaken(((Date.now() - startTime.current) / 1000).toFixed(2));
       setResult('success');
 
     } catch (e) {
@@ -149,6 +153,7 @@ export default function AttendScreen({ onNavigate }) {
           <Text style={styles.successTime}>
             {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </Text>
+          <Text style={styles.successSpeed}>⚡ Recognized in {timeTaken}s</Text>
         </View>
         <TouchableOpacity style={styles.primaryBtn} onPress={() => onNavigate('home')}>
           <Text style={styles.primaryBtnText}>Done</Text>
@@ -215,4 +220,5 @@ const styles = StyleSheet.create({
   successTitle: { fontSize: 26, fontWeight: 'bold', color: '#0f9d58', marginBottom: 12 },
   successName:  { fontSize: 28, fontWeight: 'bold', color: '#fff', marginBottom: 8 },
   successTime:  { fontSize: 18, color: '#666' },
+  successSpeed: { fontSize: 13, color: '#1a73e8', marginTop: 10 },
 });
