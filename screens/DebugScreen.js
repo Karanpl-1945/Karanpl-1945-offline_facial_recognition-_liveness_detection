@@ -1,26 +1,42 @@
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { getAllWorkers, getAllAttendance } from '../utils/storage';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { getAllWorkers, getAllAttendance, clearAllData } from '../utils/storage';
 
 export default function DebugScreen({ onNavigate }) {
   const [workers, setWorkers] = useState([]);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const [w, r] = await Promise.all([getAllWorkers(), getAllAttendance()]);
-        setWorkers(w);
-        setRecords(r);
-      } catch (e) {
-        console.log('DB error:', e);
-      } finally {
-        setLoading(false);
-      }
+  async function load() {
+    try {
+      const [w, r] = await Promise.all([getAllWorkers(), getAllAttendance()]);
+      setWorkers(w);
+      setRecords(r);
+    } catch (e) {
+      console.log('DB error:', e);
+    } finally {
+      setLoading(false);
     }
-    load();
-  }, []);
+  }
+
+  useEffect(() => { load(); }, []);
+
+  const handleClearAll = () => {
+    Alert.alert(
+      'Clear All Data',
+      'This will delete ALL registered workers and attendance records. Cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear All', style: 'destructive',
+          onPress: async () => {
+            await clearAllData();
+            await load();
+          }
+        }
+      ]
+    );
+  };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -29,7 +45,9 @@ export default function DebugScreen({ onNavigate }) {
           <Text style={styles.back}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Database Viewer</Text>
-        <View style={{ width: 50 }} />
+        <TouchableOpacity onPress={handleClearAll}>
+          <Text style={styles.clearBtn}>🗑 Clear All</Text>
+        </TouchableOpacity>
       </View>
 
       {loading ? <Text style={styles.info}>Loading...</Text> : (
@@ -76,6 +94,7 @@ const styles = StyleSheet.create({
   header:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, marginTop: 10 },
   back:         { color: '#1a73e8', fontSize: 15 },
   title:        { fontSize: 18, fontWeight: 'bold', color: '#fff' },
+  clearBtn:     { color: '#e53935', fontSize: 13 },
   info:         { color: '#666', textAlign: 'center', padding: 20 },
   sectionTitle: { fontSize: 15, fontWeight: 'bold', color: '#1a73e8', marginBottom: 10 },
   empty:        { color: '#555', fontSize: 13, marginBottom: 16 },
