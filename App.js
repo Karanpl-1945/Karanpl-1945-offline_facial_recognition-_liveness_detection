@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import NetInfo from '@react-native-community/netinfo';
 import HomeScreen   from './screens/HomeScreen';
 import AttendScreen from './screens/AttendScreen';
 import EnrollScreen from './screens/EnrollScreen';
@@ -8,17 +9,14 @@ import { syncAllPending } from './utils/sync';
 export default function App() {
   const [screen, setScreen] = useState('home');
 
-  // Auto-sync attendance records when internet is available
+  // Auto-sync attendance records when internet becomes available
   useEffect(() => {
-    try {
-      const NetInfo = require('@react-native-community/netinfo').default;
-      const unsubscribe = NetInfo.addEventListener(state => {
-        if (state.isConnected && state.isInternetReachable) {
-          syncAllPending().catch(() => {});
-        }
-      });
-      return () => unsubscribe();
-    } catch (_) {}
+    const unsubscribe = NetInfo.addEventListener(state => {
+      if (state.isConnected && state.isInternetReachable) {
+        syncAllPending().catch(() => {});
+      }
+    });
+    return () => unsubscribe();
   }, []);
 
   switch (screen) {
