@@ -1,6 +1,6 @@
 import { getPendingAttendance, markAsSynced, deleteRecord, getAllAttendance } from './storage';
 
-const AWS_API_URL = 'https://YOUR_API_GATEWAY_URL/attendance';
+const AWS_API_URL = 'https://9ktdcqxnpi.execute-api.us-east-1.amazonaws.com/attendance';
 
 async function uploadRecord(record) {
   const response = await fetch(AWS_API_URL, {
