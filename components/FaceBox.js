@@ -2,23 +2,23 @@ import { StyleSheet, View } from 'react-native';
 
 // FaceBox — draws a green box around a detected face
 // Props:
-//   face   — Vision Camera face object with bounds: { x, y, width, height }
-//   scaleX — scale factor X (camera buffer vs screen)
-//   scaleY — scale factor Y
+//   face   — face object from expo-face-detector (has bounds: { origin, size })
+//   scaleX — how much to scale X (camera preview vs screen size)
+//   scaleY — how much to scale Y
 export default function FaceBox({ face, scaleX = 1, scaleY = 1 }) {
-  if (!face || !face.bounds) return null;
+  if (!face) return null;
 
-  const { x, y, width, height } = face.bounds;
+  const { origin, size } = face.bounds;
 
   return (
     <View
       style={[
         styles.box,
         {
-          left:   x * scaleX,
-          top:    y * scaleY,
-          width:  width  * scaleX,
-          height: height * scaleY,
+          left:   origin.x * scaleX,
+          top:    origin.y * scaleY,
+          width:  size.width  * scaleX,
+          height: size.height * scaleY,
         },
       ]}
     />

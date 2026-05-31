@@ -1,63 +1,100 @@
-import { useRef, useState } from 'react';
+import * as FaceDetector from 'expo-face-detector';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useCameraPermission } from 'react-native-vision-camera';
-import { useImageFaceDetector } from 'react-native-vision-camera-face-detector';
-import FaceCamera from '../components/FaceCamera';
 import LivenessChecker from '../components/LivenessChecker';
+import FaceBox from '../components/FaceBox';
 import { getFaceEmbedding, checkAntiSpoof, loadModels, areModelsLoaded } from '../utils/modelRunner';
 import { getAllWorkers, saveAttendance } from '../utils/storage';
 import { findBestMatch } from '../utils/faceMatch';
 
 export default function AttendScreen({ onNavigate }) {
-  const { hasPermission, requestPermission } = useCameraPermission();
+  const [permission, requestPermission] = useCameraPermissions();
   const [faces, setFaces]               = useState([]);
   const [livenessPass, setLivenessPass] = useState(false);
   const [status, setStatus]             = useState('');
-  const [result, setResult]             = useState(null); // success | spoof | unknown
+  const [result, setResult]             = useState(null); // 'success'|'spoof'|'unknown'
   const [matchedName, setMatchedName]   = useState('');
   const [timeTaken, setTimeTaken]       = useState(0);
-  const camRef    = useRef(null);
-  const startTime = useRef(null);
+  const cameraRef   = useRef(null);
+  const startTime   = useRef(null);
+  const scanningRef = useRef(false);
+  const intervalRef = useRef(null);
 
-  const imageDetector = useImageFaceDetector({ performanceMode: 'accurate' });
+  useEffect(() => { loadModels(); }, []);
+
+  // Face detection loop — feeds liveness checker
+  useEffect(() => {
+    if (!permission?.granted || livenessPass) return;
+
+    intervalRef.current = setInterval(async () => {
+      if (scanningRef.current || !cameraRef.current) return;
+      scanningRef.current = true;
+      try {
+        const photo = await cameraRef.current.takePictureAsync({ quality: 0.2, skipProcessing: true });
+        const detected = await FaceDetector.detectFacesAsync(photo.uri, {
+          mode: FaceDetector.FaceDetectorMode.fast,
+          detectLandmarks: FaceDetector.FaceDetectorLandmarks.none,
+          runClassifications: FaceDetector.FaceDetectorClassifications.all,
+        });
+        setFaces(detected.faces);
+      } catch (_) {}
+      finally { scanningRef.current = false; }
+    }, 150);
+
+    return () => clearInterval(intervalRef.current);
+  }, [permission?.granted, livenessPass]);
 
   const handleLivenessPass = () => {
+    clearInterval(intervalRef.current);
     setLivenessPass(true);
-    setStatus('Liveness verified! Checking...');
     processAttendance();
   };
 
   const processAttendance = async () => {
+    if (!cameraRef.current) return;
     startTime.current = Date.now();
+
     try {
       if (!areModelsLoaded()) {
         setStatus('Loading AI models...');
         await loadModels();
       }
 
+      // Capture high quality photo
       setStatus('Capturing face...');
-      const photo = await camRef.current.capture();
+      const photo = await cameraRef.current.takePictureAsync({ base64: false, quality: 0.8 });
 
+      // Get face bounds
       setStatus('Detecting face...');
-      const detected = imageDetector.detectFaces(photo.uri);
-      if (!detected || detected.length === 0) {
-        setStatus('No face found. Please try again.');
+      const detected = await FaceDetector.detectFacesAsync(photo.uri, {
+        mode: FaceDetector.FaceDetectorMode.accurate,
+        detectLandmarks: FaceDetector.FaceDetectorLandmarks.none,
+        runClassifications: FaceDetector.FaceDetectorClassifications.none,
+      });
+
+      if (detected.faces.length === 0) {
+        setStatus('No face detected. Please try again.');
         setResult('unknown');
         return;
       }
-      const bounds = detected[0].bounds;
 
+      const faceBounds = detected.faces[0].bounds;
+
+      // Anti-spoof check — reject printed photos or screens
       setStatus('Checking for spoof...');
-      const isReal = await checkAntiSpoof(photo.uri, bounds);
+      const isReal = await checkAntiSpoof(photo.uri, faceBounds);
       if (!isReal) {
         setStatus('⚠️ Spoof detected! Use your real face.');
         setResult('spoof');
         return;
       }
 
+      // Generate 128-D face embedding
       setStatus('Recognizing face...');
-      const embedding = await getFaceEmbedding(photo.uri, bounds, photo.width, photo.height);
+      const embedding = await getFaceEmbedding(photo.uri, faceBounds);
 
+      // Find matching worker
       const workers = await getAllWorkers();
       if (workers.length === 0) {
         setStatus('No workers registered yet. Please register first.');
@@ -66,12 +103,14 @@ export default function AttendScreen({ onNavigate }) {
       }
 
       const match = findBestMatch(embedding, workers);
+
       if (!match) {
         setStatus('Face not registered. Please register first.');
         setResult('unknown');
         return;
       }
 
+      // Save attendance record to local SQLite
       await saveAttendance(match.worker.id, match.worker.name);
       setMatchedName(match.worker.name);
       setTimeTaken(((Date.now() - startTime.current) / 1000).toFixed(2));
@@ -90,21 +129,20 @@ export default function AttendScreen({ onNavigate }) {
     setFaces([]);
   };
 
-  if (!hasPermission) {
+  // ── Permission check ─────────────────────────────────────────────────────
+  if (!permission) return <View />;
+  if (!permission.granted) {
     return (
       <View style={styles.container}>
         <Text style={styles.message}>Camera permission is required</Text>
         <TouchableOpacity style={styles.primaryBtn} onPress={requestPermission}>
           <Text style={styles.primaryBtnText}>Grant Permission</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.backBtn} onPress={() => onNavigate('home')}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
       </View>
     );
   }
 
-  // ── Success screen ────────────────────────────────────────────────────────
+  // ── Success screen ───────────────────────────────────────────────────────
   if (result === 'success') {
     return (
       <View style={styles.container}>
@@ -124,24 +162,24 @@ export default function AttendScreen({ onNavigate }) {
     );
   }
 
-  // ── Camera + liveness ─────────────────────────────────────────────────────
+  // ── Camera + liveness screen ─────────────────────────────────────────────
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Take Attendance</Text>
 
       <View style={styles.cameraWrapper}>
-        <FaceCamera
-          ref={camRef}
-          isActive={true}
-          onFacesDetected={livenessPass ? () => {} : setFaces}
-        />
-        {!livenessPass && <LivenessChecker faces={faces} onPass={handleLivenessPass} />}
+        <CameraView ref={cameraRef} style={styles.camera} facing="front">
+          {faces.map((face, i) => <FaceBox key={i} face={face} />)}
+          {!livenessPass && (
+            <LivenessChecker faces={faces} onPass={handleLivenessPass} />
+          )}
+        </CameraView>
       </View>
 
       {status ? (
         <Text style={[
           styles.status,
-          result === 'spoof'   ? styles.statusRed   :
+          result === 'spoof'   ? styles.statusRed  :
           result === 'unknown' ? styles.statusAmber : styles.statusYellow
         ]}>
           {status}
@@ -165,7 +203,8 @@ const styles = StyleSheet.create({
   container:    { flex: 1, backgroundColor: '#0a0a0a', padding: 24, justifyContent: 'center' },
   title:        { fontSize: 24, fontWeight: 'bold', color: '#fff', textAlign: 'center', marginBottom: 16 },
   message:      { color: '#aaa', fontSize: 16, textAlign: 'center', marginBottom: 20 },
-  cameraWrapper:{ width: '100%', height: 440, borderRadius: 16, overflow: 'hidden', marginBottom: 16, backgroundColor: '#000' },
+  cameraWrapper:{ width: '100%', height: 420, borderRadius: 16, overflow: 'hidden', marginBottom: 16 },
+  camera:       { flex: 1 },
   status:       { textAlign: 'center', fontSize: 15, marginBottom: 16, padding: 12, borderRadius: 10 },
   statusYellow: { color: '#FFD700', backgroundColor: '#2d2500' },
   statusRed:    { color: '#ff4444', backgroundColor: '#2d0f0f' },
@@ -175,6 +214,7 @@ const styles = StyleSheet.create({
   retryBtn:     { backgroundColor: '#e8691a', padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 12 },
   backBtn:      { alignItems: 'center', marginTop: 8 },
   backText:     { color: '#555', fontSize: 14 },
+  // Success screen
   successBox:   { alignItems: 'center', marginBottom: 48 },
   successTick:  { fontSize: 72, marginBottom: 16 },
   successTitle: { fontSize: 26, fontWeight: 'bold', color: '#0f9d58', marginBottom: 12 },

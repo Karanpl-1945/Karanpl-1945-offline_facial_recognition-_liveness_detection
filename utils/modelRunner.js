@@ -1,8 +1,6 @@
 import { loadTensorflowModel } from 'react-native-fast-tflite';
 import { Asset } from 'expo-asset';
 import { cropAndResizeFace, base64ToFloat32 } from './imageUtils';
-import { loadYuNet, detectFaceYuNet } from './yunetRunner';
-import { alignFace } from './faceAlign';
 
 let sfaceModel     = null;
 let antispoofModel = null;
@@ -25,7 +23,6 @@ export async function loadModels() {
       loadModelAsset(require('../assets/models/sface.tflite')),
       loadModelAsset(require('../assets/models/antispoof.tflite')),
     ]);
-    await loadYuNet();
   } finally {
     modelsLoading = false;
   }
@@ -35,26 +32,19 @@ export function areModelsLoaded() {
   return sfaceModel !== null && antispoofModel !== null;
 }
 
-export async function getFaceEmbedding(imageUri, faceBoundsFromExpo, imageWidth = 1080, imageHeight = 1440) {
+// Generate 128-D face embedding from a photo using SFace
+// faceBounds: expo-face-detector bounds { origin:{x,y}, size:{width,height} }
+// NOTE: YuNet alignment is temporarily bypassed — using direct crop for
+// reliability while we verify the core pipeline. Re-add alignment later.
+export async function getFaceEmbedding(imageUri, faceBounds) {
   if (!sfaceModel) throw new Error('SFace model not loaded');
-
-  let croppedImage;
-  try {
-    const yunetResult = await detectFaceYuNet(imageUri, imageWidth, imageHeight);
-    if (yunetResult && yunetResult.landmarks) {
-      croppedImage = await alignFace(imageUri, yunetResult.landmarks, imageWidth, imageHeight);
-    } else {
-      croppedImage = await cropAndResizeFace(imageUri, faceBoundsFromExpo, 112, 112);
-    }
-  } catch (_) {
-    croppedImage = await cropAndResizeFace(imageUri, faceBoundsFromExpo, 112, 112);
-  }
-
-  const input  = base64ToFloat32(croppedImage.base64, 112, 112, 'minus1to1');
-  const output = await sfaceModel.run([input]);
+  const cropped = await cropAndResizeFace(imageUri, faceBounds, 112, 112);
+  const input   = base64ToFloat32(cropped.base64, 112, 112, 'minus1to1');
+  const output  = await sfaceModel.run([input]);
   return Array.from(output[0]);
 }
 
+// Passive anti-spoof check (real face vs printed photo / screen)
 export async function checkAntiSpoof(imageUri, faceBounds) {
   if (!antispoofModel) return true;
   const cropped = await cropAndResizeFace(imageUri, faceBounds, 128, 128);

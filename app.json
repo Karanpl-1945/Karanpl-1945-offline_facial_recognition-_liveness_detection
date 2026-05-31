@@ -31,10 +31,9 @@
       "react-native-fast-tflite",
       "expo-asset",
       [
-        "react-native-vision-camera",
+        "expo-camera",
         {
-          "cameraPermissionText": "RecogMe needs camera access to scan faces for attendance.",
-          "enableMicrophonePermission": false
+          "cameraPermission": "RecogMe needs camera access to scan faces for attendance."
         }
       ]
     ],
