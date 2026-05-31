@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { getAllWorkers, getAllAttendance, clearAllData } from '../utils/storage';
+import { debugYuNetOutput, loadYuNet } from '../utils/yunetRunner';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 export default function DebugScreen({ onNavigate }) {
-  const [workers, setWorkers] = useState([]);
-  const [records, setRecords] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [workers, setWorkers]       = useState([]);
+  const [records, setRecords]       = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [yunetInfo, setYunetInfo]   = useState(null);
+  const [yunetTesting, setYunetTesting] = useState(false);
 
   async function load() {
     try {
@@ -29,13 +33,31 @@ export default function DebugScreen({ onNavigate }) {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Clear All', style: 'destructive',
-          onPress: async () => {
-            await clearAllData();
-            await load();
-          }
+          onPress: async () => { await clearAllData(); await load(); }
         }
       ]
     );
+  };
+
+  // Test YuNet — creates a small blank image and runs model to see real output format
+  const testYuNet = async () => {
+    setYunetTesting(true);
+    setYunetInfo(null);
+    try {
+      await loadYuNet();
+      // Create a tiny test image (solid gray 160×120)
+      const testImg = await ImageManipulator.manipulateAsync(
+        'https://via.placeholder.com/160x120/808080/808080.jpg',
+        [],
+        { base64: false, format: ImageManipulator.SaveFormat.JPEG }
+      );
+      const results = await debugYuNetOutput(testImg.uri);
+      setYunetInfo(results);
+    } catch (e) {
+      setYunetInfo([{ error: e.message }]);
+    } finally {
+      setYunetTesting(false);
+    }
   };
 
   return (
@@ -49,6 +71,30 @@ export default function DebugScreen({ onNavigate }) {
           <Text style={styles.clearBtn}>🗑 Clear All</Text>
         </TouchableOpacity>
       </View>
+
+      {/* YuNet output verification */}
+      <TouchableOpacity
+        style={styles.yunetBtn}
+        onPress={testYuNet}
+        disabled={yunetTesting}
+      >
+        <Text style={styles.yunetBtnText}>
+          {yunetTesting ? 'Testing YuNet...' : '🔍 Test YuNet Output Format'}
+        </Text>
+      </TouchableOpacity>
+
+      {yunetInfo && yunetInfo.map((t, i) => (
+        <View key={i} style={styles.yunetCard}>
+          {t.error ? (
+            <Text style={styles.yunetError}>Error: {t.error}</Text>
+          ) : (
+            <>
+              <Text style={styles.yunetTitle}>Tensor {t.tensor}: {t.length} values</Text>
+              <Text style={styles.yunetVals}>{t.first20.join(', ')}</Text>
+            </>
+          )}
+        </View>
+      ))}
 
       {loading ? <Text style={styles.info}>Loading...</Text> : (
         <>
@@ -95,6 +141,12 @@ const styles = StyleSheet.create({
   back:         { color: '#1a73e8', fontSize: 15 },
   title:        { fontSize: 18, fontWeight: 'bold', color: '#fff' },
   clearBtn:     { color: '#e53935', fontSize: 13 },
+  yunetBtn:     { backgroundColor: '#1a2d1a', borderWidth: 1, borderColor: '#0f9d58', borderRadius: 10, padding: 14, alignItems: 'center', marginBottom: 12 },
+  yunetBtnText: { color: '#0f9d58', fontSize: 14, fontWeight: '600' },
+  yunetCard:    { backgroundColor: '#111', borderRadius: 10, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#0f9d58' },
+  yunetTitle:   { color: '#0f9d58', fontSize: 13, fontWeight: 'bold', marginBottom: 4 },
+  yunetVals:    { color: '#888', fontSize: 11, lineHeight: 18 },
+  yunetError:   { color: '#e53935', fontSize: 12 },
   info:         { color: '#666', textAlign: 'center', padding: 20 },
   sectionTitle: { fontSize: 15, fontWeight: 'bold', color: '#1a73e8', marginBottom: 10 },
   empty:        { color: '#555', fontSize: 13, marginBottom: 16 },

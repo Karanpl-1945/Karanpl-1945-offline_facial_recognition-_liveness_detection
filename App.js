@@ -19,8 +19,9 @@ export default function App() {
       .catch(() => setDbReady(true)); // show app even if DB fails
   }, []);
 
-  // Auto-sync when internet available
+  // Auto-sync on startup + whenever internet becomes available
   useEffect(() => {
+    syncAllPending().catch(() => {});
     const unsubscribe = NetInfo.addEventListener(state => {
       if (state.isConnected && state.isInternetReachable) {
         syncAllPending().catch(() => {});

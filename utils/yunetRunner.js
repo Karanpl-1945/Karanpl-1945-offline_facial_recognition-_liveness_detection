@@ -4,7 +4,6 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { Buffer } from 'buffer';
 import * as jpeg from 'jpeg-js';
 
-// YuNet input size
 const YUNET_W = 160;
 const YUNET_H = 120;
 
@@ -17,40 +16,69 @@ export async function loadYuNet() {
   yunetModel = await loadTensorflowModel({ url: asset.localUri }, []);
 }
 
-// Run YuNet on an image URI
-// Returns best detected face: { bounds, landmarks: [leftEye, rightEye, nose, leftMouth, rightMouth] }
-// Each landmark: { x, y } in original image coordinates
-export async function detectFaceYuNet(imageUri, imageWidth, imageHeight) {
+// Run YuNet and return raw output for verification
+// Call this first to see the real output format
+export async function debugYuNetOutput(imageUri) {
   if (!yunetModel) await loadYuNet();
 
-  // Resize to YuNet input size (160×120)
   const resized = await ImageManipulator.manipulateAsync(
     imageUri,
     [{ resize: { width: YUNET_W, height: YUNET_H } }],
     { base64: true, format: ImageManipulator.SaveFormat.JPEG, compress: 1 }
   );
 
-  // Decode and convert to Float32 BGR (0-255) — YuNet expects BGR like OpenCV
   const buf     = Buffer.from(resized.base64, 'base64');
   const decoded = jpeg.decode(buf, { useTArray: true });
   const { data } = decoded;
 
   const input = new Float32Array(YUNET_H * YUNET_W * 3);
   for (let i = 0; i < YUNET_H * YUNET_W; i++) {
-    input[i * 3]     = data[i * 4 + 2]; // B  ← note: BGR order
+    input[i * 3]     = data[i * 4 + 2]; // B
     input[i * 3 + 1] = data[i * 4 + 1]; // G
     input[i * 3 + 2] = data[i * 4];     // R
   }
 
-  // Run YuNet inference
-  const outputs = await yunetModel.run([input]);
+  const outputs = await yunetModel.run([input.buffer]);
 
-  // Parse output — YuNet outputs detections as flat array
-  // Each detection: [x, y, w, h, score, lm0x, lm0y, lm1x, lm1y, lm2x, lm2y, lm3x, lm3y, lm4x, lm4y]
-  const detections = outputs[0];
+  // Return debug info — shape + first 20 values of each tensor
+  return outputs.map((buf, i) => {
+    const arr = new Float32Array(buf);
+    return {
+      tensor: i,
+      length: arr.length,
+      first20: Array.from(arr.slice(0, 20)).map(v => v.toFixed(4)),
+    };
+  });
+}
+
+// Run YuNet face detection — returns landmarks for alignment
+// Returns: { landmarks: [{x,y}, ...] } or null
+export async function detectFaceYuNet(imageUri, imageWidth, imageHeight) {
+  if (!yunetModel) await loadYuNet();
+
+  const resized = await ImageManipulator.manipulateAsync(
+    imageUri,
+    [{ resize: { width: YUNET_W, height: YUNET_H } }],
+    { base64: true, format: ImageManipulator.SaveFormat.JPEG, compress: 1 }
+  );
+
+  const buf     = Buffer.from(resized.base64, 'base64');
+  const decoded = jpeg.decode(buf, { useTArray: true });
+  const { data } = decoded;
+
+  const input = new Float32Array(YUNET_H * YUNET_W * 3);
+  for (let i = 0; i < YUNET_H * YUNET_W; i++) {
+    input[i * 3]     = data[i * 4 + 2];
+    input[i * 3 + 1] = data[i * 4 + 1];
+    input[i * 3 + 2] = data[i * 4];
+  }
+
+  const outputs = await yunetModel.run([input.buffer]);
+  const detections = new Float32Array(outputs[0]);
+
   if (!detections || detections.length < 15) return null;
 
-  // Find detection with highest confidence score
+  // Find best detection (highest confidence)
   let best = null;
   let bestScore = 0;
   const stride = 15;
@@ -65,27 +93,16 @@ export async function detectFaceYuNet(imageUri, imageWidth, imageHeight) {
 
   if (best === null) return null;
 
-  // Scale factor from YuNet input size back to original image size
   const scaleX = imageWidth  / YUNET_W;
   const scaleY = imageHeight / YUNET_H;
 
-  const x = detections[best]     * scaleX;
-  const y = detections[best + 1] * scaleY;
-  const w = detections[best + 2] * scaleX;
-  const h = detections[best + 3] * scaleY;
-
-  // 5 landmarks scaled back to original image
   const landmarks = [
-    { x: detections[best + 5]  * scaleX, y: detections[best + 6]  * scaleY }, // left eye
-    { x: detections[best + 7]  * scaleX, y: detections[best + 8]  * scaleY }, // right eye
-    { x: detections[best + 9]  * scaleX, y: detections[best + 10] * scaleY }, // nose
-    { x: detections[best + 11] * scaleX, y: detections[best + 12] * scaleY }, // left mouth
-    { x: detections[best + 13] * scaleX, y: detections[best + 14] * scaleY }, // right mouth
+    { x: detections[best + 5]  * scaleX, y: detections[best + 6]  * scaleY },
+    { x: detections[best + 7]  * scaleX, y: detections[best + 8]  * scaleY },
+    { x: detections[best + 9]  * scaleX, y: detections[best + 10] * scaleY },
+    { x: detections[best + 11] * scaleX, y: detections[best + 12] * scaleY },
+    { x: detections[best + 13] * scaleX, y: detections[best + 14] * scaleY },
   ];
 
-  return {
-    bounds: { origin: { x, y }, size: { width: w, height: h } },
-    landmarks,
-    score: bestScore,
-  };
+  return { landmarks, score: bestScore };
 }
