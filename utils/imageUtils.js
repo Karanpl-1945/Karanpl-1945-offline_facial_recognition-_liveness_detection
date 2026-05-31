@@ -1,6 +1,6 @@
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Buffer } from 'buffer';
-import jpeg from 'jpeg-js';
+import * as jpeg from 'jpeg-js';
 
 // Crop face region from photo and resize to target dimensions
 export async function cropAndResizeFace(imageUri, bounds, targetW, targetH) {

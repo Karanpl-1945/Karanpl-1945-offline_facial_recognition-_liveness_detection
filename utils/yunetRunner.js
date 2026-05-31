@@ -1,7 +1,7 @@
 import { loadTensorflowModel } from 'react-native-fast-tflite';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Buffer } from 'buffer';
-import jpeg from 'jpeg-js';
+import * as jpeg from 'jpeg-js';
 
 // YuNet input size
 const YUNET_W = 160;
