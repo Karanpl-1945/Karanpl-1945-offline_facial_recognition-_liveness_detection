@@ -8,13 +8,24 @@ import * as SQLite from 'expo-sqlite';
 //   attendance → attendance records with sync status
 
 let db = null;
+let dbPromise = null;
 
-// Open (or create) the database
 async function getDB() {
   if (db) return db;
-  db = await SQLite.openDatabaseAsync('faceattend.db');
-  await setupTables(db);
-  return db;
+  if (!dbPromise) {
+    dbPromise = SQLite.openDatabaseAsync('faceattend.db').then(async d => {
+      await setupTables(d);
+      db = d;
+      return d;
+    });
+  }
+  return dbPromise;
+}
+
+// Call this once from App.js on startup to guarantee DB is ready
+// before any screen tries to use it
+export async function initDB() {
+  return getDB();
 }
 
 // Create tables if they don't exist yet
