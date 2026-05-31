@@ -3,7 +3,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import LivenessChecker from '../components/LivenessChecker';
-import FaceBox from '../components/FaceBox';
+import FaceGuide from '../components/FaceGuide';
 import { getFaceEmbedding, checkAntiSpoof, loadModels, areModelsLoaded } from '../utils/modelRunner';
 import { getAllWorkers, saveAttendance } from '../utils/storage';
 import { findBestMatch } from '../utils/faceMatch';
@@ -169,7 +169,10 @@ export default function AttendScreen({ onNavigate }) {
 
       <View style={styles.cameraWrapper}>
         <CameraView ref={cameraRef} style={styles.camera} facing="front">
-          {faces.map((face, i) => <FaceBox key={i} face={face} />)}
+          <FaceGuide
+            active={faces.length > 0}
+            hint={faces.length > 0 ? '' : 'Place your face in the oval'}
+          />
           {!livenessPass && (
             <LivenessChecker faces={faces} onPass={handleLivenessPass} />
           )}

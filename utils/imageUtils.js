@@ -3,19 +3,36 @@ import { Buffer } from 'buffer';
 import * as jpeg from 'jpeg-js';
 
 // Crop face region from photo and resize to target dimensions
+// bounds: expo-face-detector { origin:{x,y}, size:{width,height} } in photo pixels
 export async function cropAndResizeFace(imageUri, bounds, targetW, targetH) {
   const { origin, size } = bounds;
 
+  // Get the real image dimensions so we can clamp the crop inside them
+  const info = await ImageManipulator.manipulateAsync(imageUri, [], {});
+  const imgW = info.width;
+  const imgH = info.height;
+
+  // Desired crop with 20% padding around the face
   const pad = 0.20;
-  const x   = Math.max(0, origin.x - size.width  * pad);
-  const y   = Math.max(0, origin.y - size.height * pad);
-  const w   = size.width  * (1 + 2 * pad);
-  const h   = size.height * (1 + 2 * pad);
+  let x = Math.round(origin.x - size.width  * pad);
+  let y = Math.round(origin.y - size.height * pad);
+  let w = Math.round(size.width  * (1 + 2 * pad));
+  let h = Math.round(size.height * (1 + 2 * pad));
+
+  // Clamp origin to >= 0
+  x = Math.max(0, x);
+  y = Math.max(0, y);
+
+  // Clamp size so x+w <= imgW and y+h <= imgH (fixes "y + height must be <= bitmap.height()")
+  if (x + w > imgW) w = imgW - x;
+  if (y + h > imgH) h = imgH - y;
+  w = Math.max(1, w);
+  h = Math.max(1, h);
 
   return await ImageManipulator.manipulateAsync(
     imageUri,
     [
-      { crop: { originX: Math.round(x), originY: Math.round(y), width: Math.round(w), height: Math.round(h) } },
+      { crop: { originX: x, originY: y, width: w, height: h } },
       { resize: { width: targetW, height: targetH } },
     ],
     { base64: true, format: ImageManipulator.SaveFormat.JPEG, compress: 1 }
