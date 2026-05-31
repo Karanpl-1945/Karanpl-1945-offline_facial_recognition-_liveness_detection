@@ -30,6 +30,11 @@ export default function HomeScreen({ onNavigate }) {
       </TouchableOpacity>
 
       <Text style={styles.offlineTag}>✦ 100% Works Offline</Text>
+
+      {/* TEMP: remove after testing */}
+      <TouchableOpacity style={styles.debugBtn} onPress={() => onNavigate('debug')}>
+        <Text style={styles.debugText}>🛠 View Stored Data</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -46,4 +51,6 @@ const styles = StyleSheet.create({
   buttonText:   { fontSize: 22, fontWeight: 'bold', color: '#fff' },
   buttonSub:    { fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 6 },
   offlineTag:   { marginTop: 40, fontSize: 12, color: '#444' },
+  debugBtn:     { marginTop: 16, padding: 10 },
+  debugText:    { color: '#333', fontSize: 12 },
 });

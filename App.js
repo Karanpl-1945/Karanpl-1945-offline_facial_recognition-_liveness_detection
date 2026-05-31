@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import HomeScreen   from './screens/HomeScreen';
 import AttendScreen from './screens/AttendScreen';
 import EnrollScreen from './screens/EnrollScreen';
+import DebugScreen  from './screens/DebugScreen';
 import { syncAllPending } from './utils/sync';
 
 export default function App() {
@@ -23,6 +24,7 @@ export default function App() {
   switch (screen) {
     case 'attend': return <AttendScreen onNavigate={setScreen} />;
     case 'enroll': return <EnrollScreen onNavigate={setScreen} />;
+    case 'debug':  return <DebugScreen  onNavigate={setScreen} />;
     default:       return <HomeScreen   onNavigate={setScreen} />;
   }
 }
