@@ -45,10 +45,10 @@ export default function DebugScreen({ onNavigate }) {
     setYunetInfo(null);
     try {
       await loadYuNet();
-      // Create a tiny test image (solid gray 160×120)
+      // Use the app icon as test image — it's already bundled locally
       const testImg = await ImageManipulator.manipulateAsync(
-        'https://via.placeholder.com/160x120/808080/808080.jpg',
-        [],
+        require('../assets/icon.png'),
+        [{ resize: { width: 160, height: 120 } }],
         { base64: false, format: ImageManipulator.SaveFormat.JPEG }
       );
       const results = await debugYuNetOutput(testImg.uri);

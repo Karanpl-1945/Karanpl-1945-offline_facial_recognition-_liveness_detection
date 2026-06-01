@@ -4,9 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import LivenessChecker from '../components/LivenessChecker';
 import FaceGuide from '../components/FaceGuide';
-import { getFaceEmbedding, checkAntiSpoof, loadModels, areModelsLoaded } from '../utils/modelRunner';
+import { getFaceEmbedding, checkAntiSpoof, debugAntiSpoofScores, loadModels, areModelsLoaded } from '../utils/modelRunner';
 import { getAllWorkers, saveAttendance } from '../utils/storage';
 import { findBestMatch } from '../utils/faceMatch';
+import { syncAllPending } from '../utils/sync';
 
 export default function AttendScreen({ onNavigate }) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -31,7 +32,7 @@ export default function AttendScreen({ onNavigate }) {
       if (scanningRef.current || !cameraRef.current) return;
       scanningRef.current = true;
       try {
-        const photo = await cameraRef.current.takePictureAsync({ quality: 0.2, skipProcessing: true });
+        const photo = await cameraRef.current.takePictureAsync({ quality: 0.2, skipProcessing: true, shutterSound: false });
         const detected = await FaceDetector.detectFacesAsync(photo.uri, {
           mode: FaceDetector.FaceDetectorMode.fast,
           detectLandmarks: FaceDetector.FaceDetectorLandmarks.none,
@@ -84,8 +85,9 @@ export default function AttendScreen({ onNavigate }) {
       // Anti-spoof check — reject printed photos or screens
       setStatus('Checking for spoof...');
       const isReal = await checkAntiSpoof(photo.uri, faceBounds);
+      const spoofScores = await debugAntiSpoofScores(photo.uri, faceBounds);
       if (!isReal) {
-        setStatus('⚠️ Spoof detected! Use your real face.');
+        setStatus(`⚠️ Spoof detected! Scores: [${spoofScores.map(s=>s.toFixed(3)).join(', ')}]`);
         setResult('spoof');
         return;
       }
@@ -112,6 +114,7 @@ export default function AttendScreen({ onNavigate }) {
 
       // Save attendance record to local SQLite
       await saveAttendance(match.worker.id, match.worker.name);
+      syncAllPending().catch(() => {}); // try to sync immediately if internet is available
       setMatchedName(match.worker.name);
       setTimeTaken(((Date.now() - startTime.current) / 1000).toFixed(2));
       setResult('success');

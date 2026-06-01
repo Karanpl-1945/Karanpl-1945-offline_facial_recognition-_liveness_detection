@@ -33,7 +33,7 @@ export default function EnrollScreen({ onNavigate }) {
       if (scanningRef.current || !cameraRef.current) return;
       scanningRef.current = true;
       try {
-        const photo = await cameraRef.current.takePictureAsync({ quality: 0.2, skipProcessing: true });
+        const photo = await cameraRef.current.takePictureAsync({ quality: 0.2, skipProcessing: true, shutterSound: false });
         const result = await FaceDetector.detectFacesAsync(photo.uri, {
           mode: FaceDetector.FaceDetectorMode.fast,
           detectLandmarks: FaceDetector.FaceDetectorLandmarks.none,

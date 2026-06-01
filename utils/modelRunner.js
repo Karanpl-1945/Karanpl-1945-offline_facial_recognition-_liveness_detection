@@ -57,9 +57,20 @@ export async function getFaceEmbedding(imageUri, faceBounds, imageWidth = 1080, 
   return Array.from(new Float32Array(output[0]));
 }
 
-// Anti-spoof TEMPORARILY DISABLED — calibrating correct output interpretation
+// Passive anti-spoof check using anti-spoof-mn3
+// Input: BGR order, (pixel - mean) / scale per Intel model card
+// Output: [real_score, spoof_score] — index 0 = real person
 export async function checkAntiSpoof(imageUri, faceBounds) {
-  return true;
+  if (!antispoofModel) return true;
+  try {
+    const cropped = await cropAndResizeFace(imageUri, faceBounds, 128, 128);
+    const input   = base64ToAntiSpoofInput(cropped.base64, 128, 128);
+    const output  = await antispoofModel.run([input.buffer]);
+    const scores  = new Float32Array(output[0]);
+    return scores[0] >= scores[1]; // real >= spoof → pass
+  } catch (_) {
+    return true; // fail-open if model errors
+  }
 }
 
 // Calibration helper — returns raw anti-spoof scores
