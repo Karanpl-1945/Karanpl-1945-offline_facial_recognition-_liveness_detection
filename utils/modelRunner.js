@@ -67,7 +67,7 @@ export async function checkAntiSpoof(imageUri, faceBounds) {
     const input   = base64ToAntiSpoofInput(cropped.base64, 128, 128);
     const output  = await antispoofModel.run([input.buffer]);
     const scores  = new Float32Array(output[0]);
-    return scores[0] >= scores[1]; // real >= spoof → pass
+    return scores[1] >= scores[0]; // real (index 1) >= spoof (index 0) → pass
   } catch (_) {
     return true; // fail-open if model errors
   }
